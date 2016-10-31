@@ -8,6 +8,7 @@ import android.opengl.GLSurfaceView;
 import com.boyo.camerafilterfbo.GlUtil;
 import com.boyo.camerafilterfbo.camera.CameraController;
 import com.boyo.camerafilterfbo.filter.BaseFilter;
+import com.boyo.camerafilterfbo.filter.BeautyFilter;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -43,7 +44,12 @@ public class GLSurfaceViewRender implements GLSurfaceView.Renderer {
         mCameraSufaceTexture = new SurfaceTexture(mCameraTextureId);
         mCameraSufaceTexture.setOnFrameAvailableListener(mFrameAvailableListener);
 
-        mFilter = new BaseFilter(mContext);
+        mFilter = new BeautyFilter(mContext);
+        if (mPreviewHeight == 0 || mPreviewWidth == 0) {
+            mPreviewHeight = 640;
+            mPreviewWidth = 480;
+        }
+        mFilter.setPreviewSize(mPreviewWidth, mPreviewHeight);
     }
 
     @Override
@@ -52,14 +58,8 @@ public class GLSurfaceViewRender implements GLSurfaceView.Renderer {
         mSurfaceHeight = height;
 
         CameraController.getInstance().setupCamera(mCameraSufaceTexture, mContext, width);
-        if (mPreviewHeight == 0 || mPreviewWidth == 0) {
-            mPreviewHeight = 640;
-            mPreviewWidth = 480;
-        }
         CameraController.getInstance().configureCameraParameters(mPreviewWidth, mPreviewHeight);
-        mFilter.setPreviewSize(mPreviewWidth, mPreviewHeight);
-        mFilter.setSurfaceSize(mSurfaceWidth, mSurfaceHeight);
-
+        mFilter.onSurfaceChanged(mSurfaceWidth, mSurfaceHeight);
         CameraController.getInstance().startCameraPreview();
     }
 

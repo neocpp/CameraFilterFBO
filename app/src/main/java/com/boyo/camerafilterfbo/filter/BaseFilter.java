@@ -31,13 +31,14 @@ public class BaseFilter {
             0.0f, 1.0f,
     };
 
-    FloatBuffer VERTEX_BUF, TEXTURE_COORD_BUF;
-    private static int mCameraProgram = 0;
-    protected int mDrawProgram;
-    private int mSurfaceWidth, mSurfaceHeight;
-    private int mPreviewWidth, mPreviewHeight;
+    FloatBuffer VERTEX_BUF, TEXTURE_COORD_BUF, TEXTURE_COORD_CROP;
+    private static int mCameraProgram = 0; // 摄像头预览数据-->纹理
+    protected int mFilterProgram; // 滤镜处理
+    private int mPreviewProgram; // 输出到预览窗口
+    protected int mSurfaceWidth, mSurfaceHeight;
+    protected int mPreviewWidth, mPreviewHeight;
 
-    private RenderBuffer mCameraFBO;
+    private RenderBuffer mCameraFBO, mFilterFBO;
 
     public BaseFilter(Context context) {
         if (VERTEX_BUF == null) {
@@ -54,11 +55,28 @@ public class BaseFilter {
             TEXTURE_COORD_BUF.position(0);
         }
 
+        if (TEXTURE_COORD_CROP == null) {
+            TEXTURE_COORD_CROP = ByteBuffer.allocateDirect(TEXTURE_COORDS.length * 4)
+                    .order(ByteOrder.nativeOrder()).asFloatBuffer();
+            TEXTURE_COORD_CROP.put(TEXTURE_COORDS);
+            TEXTURE_COORD_CROP.position(0);
+        }
+
         if (mCameraProgram == 0) {
             mCameraProgram = GlUtil.createProgram(context, R.raw.vertex_shader_base, R.raw.fragment_shader_ext);
         }
 
-        mDrawProgram = GlUtil.createProgram(context, R.raw.vertex_shader_texmat, R.raw.fragment_shader);
+        mPreviewProgram = GlUtil.createProgram(context, R.raw.vertex_shader_texmat, R.raw.fragment_shader);
+
+        mFilterProgram = GlUtil.createProgram(context, getVertexShaderResId(), getFragmentShaderResId());
+    }
+
+    protected int getVertexShaderResId() {
+        return R.raw.vertex_shader_base;
+    }
+
+    protected int getFragmentShaderResId() {
+        return R.raw.fragment_shader_ext;
     }
 
     public void setPreviewSize(int w, int h) {
@@ -66,55 +84,68 @@ public class BaseFilter {
         mPreviewHeight = h;
     }
 
-    public void setSurfaceSize(int w, int h) {
+    public void onSurfaceChanged(int w, int h) {
         mSurfaceWidth = w;
         mSurfaceHeight = h;
+
+        // 对纹理坐标进行裁剪，使预览分辨率适应surface的宽高
+        if (mPreviewHeight != 0 && mPreviewWidth != 0) {
+            float ratioW = mSurfaceWidth * 1.0f / mPreviewWidth;
+            float ratioH = mSurfaceHeight * 1.0f / mPreviewHeight;
+            float ratio = Math.max(ratioH, ratioW);
+
+            float offsetx = (mPreviewWidth * ratio - mSurfaceWidth) / (mSurfaceWidth * 2.0f);
+            float offsety = (mPreviewHeight * ratio - mSurfaceHeight) / (mSurfaceHeight * 2.0f);
+
+            float tcoords[] = {
+                    1.0f - offsetx, 0.0f + offsety,
+                    0.0f + offsetx, 0.0f + offsety,
+                    1.0f - offsetx, 1.0f - offsety,
+                    0.0f + offsetx, 1.0f - offsety,
+            };
+
+            TEXTURE_COORD_CROP.put(tcoords);
+            TEXTURE_COORD_CROP.position(0);
+        }
     }
 
     final public void draw(int cameraTexId, float[] textMat) {
 
+        // 把摄像机的数据绘制到mCameraFBO, 制作普通纹理
         if (mCameraFBO == null || mCameraFBO.getWidth() != mPreviewWidth || mCameraFBO.getHeight() != mPreviewHeight) {
             mCameraFBO = new RenderBuffer(mPreviewWidth, mPreviewHeight, GLES20.GL_TEXTURE0);
         }
 
         GLES20.glUseProgram(mCameraProgram);
 
-        int uTextureLocation = GLES20.glGetUniformLocation(mCameraProgram, "uTexture");
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, cameraTexId);
-        GLES20.glUniform1i(uTextureLocation, 0);
+        onBindGlslValue(mCameraProgram, GLES11Ext.GL_TEXTURE_EXTERNAL_OES, cameraTexId, VERTEX_BUF, TEXTURE_COORD_BUF);
 
-        int aPositionLocation = GLES20.glGetAttribLocation(mCameraProgram, "aPosition");
-        GLES20.glEnableVertexAttribArray(aPositionLocation);
-        GLES20.glVertexAttribPointer(aPositionLocation, 2, GLES20.GL_FLOAT, false, 4 * 2, VERTEX_BUF);
-
-        int aTexCoordLocation = GLES20.glGetAttribLocation(mCameraProgram, "aTextureCoord");
-        GLES20.glEnableVertexAttribArray(aTexCoordLocation);
-        GLES20.glVertexAttribPointer(aTexCoordLocation, 2, GLES20.GL_FLOAT, false, 4 * 2, TEXTURE_COORD_BUF);
-
-
-        // Render to texture
         mCameraFBO.bind();
         GLES20.glViewport(0, 0, mPreviewWidth, mPreviewHeight);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         mCameraFBO.unbind();
 
-        GLES20.glUseProgram(mDrawProgram);
-        uTextureLocation = GLES20.glGetUniformLocation(mDrawProgram, "uTexture");
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mCameraFBO.getTexId());
-        GLES20.glUniform1i(uTextureLocation, 0);
+        // filter 对摄像机的数据进行滤波处理
+        if (mFilterFBO == null || mFilterFBO.getWidth() != mPreviewWidth || mFilterFBO.getHeight() != mPreviewHeight) {
+            mFilterFBO = new RenderBuffer(mPreviewWidth, mPreviewHeight, GLES20.GL_TEXTURE0);
+        }
 
-        aPositionLocation = GLES20.glGetAttribLocation(mDrawProgram, "aPosition");
-        GLES20.glEnableVertexAttribArray(aPositionLocation);
-        GLES20.glVertexAttribPointer(aPositionLocation, 2, GLES20.GL_FLOAT, false, 4 * 2, VERTEX_BUF);
+        GLES20.glUseProgram(mFilterProgram);
 
-        aTexCoordLocation = GLES20.glGetAttribLocation(mDrawProgram, "aTextureCoord");
-        GLES20.glEnableVertexAttribArray(aTexCoordLocation);
-        GLES20.glVertexAttribPointer(aTexCoordLocation, 2, GLES20.GL_FLOAT, false, 4 * 2, TEXTURE_COORD_BUF);
+        onBindFilterGlslValue();
 
-        int uTexMatrixLoc = GLES20.glGetUniformLocation(mDrawProgram, "uTexMatrix");
+        mFilterFBO.bind();
+        GLES20.glViewport(0, 0, mPreviewWidth, mPreviewHeight);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        mFilterFBO.unbind();
+
+        // 将合成的纹理绘制到窗口
+        GLES20.glUseProgram(mPreviewProgram);
+        onBindGlslValue(mPreviewProgram, GLES20.GL_TEXTURE_2D, mFilterFBO.getTexId(), VERTEX_BUF, TEXTURE_COORD_CROP);
+
+        int uTexMatrixLoc = GLES20.glGetUniformLocation(mPreviewProgram, "uTexMatrix");
         GLES20.glUniformMatrix4fv(uTexMatrixLoc, 1, false, textMat, 0);
 
         GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
@@ -123,10 +154,37 @@ public class BaseFilter {
 
     }
 
+    protected void onBindFilterGlslValue() {
+        onBindGlslValue(mFilterProgram, GLES20.GL_TEXTURE_2D, mCameraFBO.getTexId(), VERTEX_BUF, TEXTURE_COORD_BUF);
+    }
+
+    private void onBindGlslValue(int program, int texTarget, int textId, FloatBuffer vertexBuffer, FloatBuffer textrueBuffer) {
+        int uTextureLocation = GLES20.glGetUniformLocation(program, "uTexture");
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(texTarget, textId);
+        GLES20.glUniform1i(uTextureLocation, 0);
+
+        int aPositionLocation = GLES20.glGetAttribLocation(program, "aPosition");
+        GLES20.glEnableVertexAttribArray(aPositionLocation);
+        GLES20.glVertexAttribPointer(aPositionLocation, 2, GLES20.GL_FLOAT, false, 4 * 2, vertexBuffer);
+
+        int aTexCoordLocation = GLES20.glGetAttribLocation(program, "aTextureCoord");
+        GLES20.glEnableVertexAttribArray(aTexCoordLocation);
+        GLES20.glVertexAttribPointer(aTexCoordLocation, 2, GLES20.GL_FLOAT, false, 4 * 2, textrueBuffer);
+    }
+
+    public int getTextureId() {
+        if (mFilterFBO != null) {
+            return mFilterFBO.getTexId();
+        }
+
+        return 0;
+    }
+
     public void release() {
         GLES20.glDeleteProgram(mCameraProgram);
-        GLES20.glDeleteProgram(mDrawProgram);
+        GLES20.glDeleteProgram(mPreviewProgram);
         mCameraProgram = 0;
-        mDrawProgram = 0;
+        mPreviewProgram = 0;
     }
 }
