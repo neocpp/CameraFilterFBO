@@ -21,11 +21,6 @@ public class BeautyFilter extends BaseFilter {
     }
 
     @Override
-    protected int getVertexShaderResId() {
-        return super.getVertexShaderResId();
-    }
-
-    @Override
     protected void onBindFilterGlslValue() {
         super.onBindFilterGlslValue();
         int singleStepOffsetLocation = GLES20.glGetUniformLocation(mFilterProgram, "singleStepOffset");

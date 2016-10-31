@@ -68,6 +68,10 @@ public class GLSurfaceViewRender implements GLSurfaceView.Renderer {
         mCameraSufaceTexture.updateTexImage();
         mCameraSufaceTexture.getTransformMatrix(mSTMatrix);
         mFilter.draw(mCameraTextureId, mSTMatrix);
+
+        mFilter.getTextureId();
+        // recording
+
     }
 
     public void notifyPausing() {
