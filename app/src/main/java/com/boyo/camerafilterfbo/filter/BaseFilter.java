@@ -63,10 +63,10 @@ public class BaseFilter {
         }
 
         if (mCameraProgram == 0) {
-            mCameraProgram = GlUtil.createProgram(context, R.raw.vertex_shader_base, R.raw.fragment_shader_ext);
+            mCameraProgram = GlUtil.createProgram(context, R.raw.vertex_shader_texmat, R.raw.fragment_shader_ext);
         }
 
-        mPreviewProgram = GlUtil.createProgram(context, R.raw.vertex_shader_texmat, R.raw.fragment_shader);
+        mPreviewProgram = GlUtil.createProgram(context, R.raw.vertex_shader_base, R.raw.fragment_shader);
 
         mFilterProgram = GlUtil.createProgram(context, getVertexShaderResId(), getFragmentShaderResId());
     }
@@ -119,6 +119,8 @@ public class BaseFilter {
         GLES20.glUseProgram(mCameraProgram);
 
         onBindGlslValue(mCameraProgram, GLES11Ext.GL_TEXTURE_EXTERNAL_OES, cameraTexId, VERTEX_BUF, TEXTURE_COORD_BUF);
+        int uTexMatrixLoc = GLES20.glGetUniformLocation(mCameraProgram, "uTexMatrix");
+        GLES20.glUniformMatrix4fv(uTexMatrixLoc, 1, false, textMat, 0);
 
         mCameraFBO.bind();
         GLES20.glViewport(0, 0, mPreviewWidth, mPreviewHeight);
@@ -145,8 +147,6 @@ public class BaseFilter {
         GLES20.glUseProgram(mPreviewProgram);
         onBindGlslValue(mPreviewProgram, GLES20.GL_TEXTURE_2D, mFilterFBO.getTexId(), VERTEX_BUF, TEXTURE_COORD_CROP);
 
-        int uTexMatrixLoc = GLES20.glGetUniformLocation(mPreviewProgram, "uTexMatrix");
-        GLES20.glUniformMatrix4fv(uTexMatrixLoc, 1, false, textMat, 0);
 
         GLES20.glViewport(0, 0, mSurfaceWidth, mSurfaceHeight);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);

@@ -33,6 +33,10 @@ public class CameraGLSurfaceView extends GLSurfaceView implements SurfaceTexture
         setRenderMode(RENDERMODE_WHEN_DIRTY);
     }
 
+    public GLSurfaceViewRender getRender() {
+        return mRenderer;
+    }
+
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
         requestRender();
