@@ -5,6 +5,7 @@ import android.graphics.SurfaceTexture;
 import android.opengl.EGL14;
 import android.opengl.GLES11Ext;
 import android.opengl.GLSurfaceView;
+import android.util.Log;
 
 import com.boyo.camerafilterfbo.GlUtil;
 import com.boyo.camerafilterfbo.camera.CameraController;
@@ -21,7 +22,7 @@ import javax.microedition.khronos.opengles.GL10;
  */
 
 public class GLSurfaceViewRender implements GLSurfaceView.Renderer {
-
+    private static final String TAG = "GLSurfaceViewRender";
     private static final int RECORDING_OFF = 0;
     private static final int RECORDING_ON = 1;
     private static final int RECORDING_RESUMED = 2;
@@ -61,8 +62,8 @@ public class GLSurfaceViewRender implements GLSurfaceView.Renderer {
     }
 
     public void setPreviewSize(int w, int h) {
-        mSurfaceWidth = w;
-        mSurfaceHeight = h;
+        mPreviewWidth = w;
+        mPreviewHeight = h;
     }
 
     @Override
@@ -86,11 +87,12 @@ public class GLSurfaceViewRender implements GLSurfaceView.Renderer {
             mRecordingStatus = RECORDING_OFF;
         }
 
-        mRecordingEnabled = true;
+        mRecordingEnabled = false;
     }
 
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
+        Log.e(TAG, "onSurfaceChanged(): width " + width + ";height" + height);
         mSurfaceWidth = width;
         mSurfaceHeight = height;
 
@@ -159,8 +161,10 @@ public class GLSurfaceViewRender implements GLSurfaceView.Renderer {
         //mVideoEncoder.stopRecording();
     }
 
-    public void stopRecording(){
+    public void stopRecording() {
         //mRecordingEnabled = false;
-        mVideoEncoder.stopRecording();
+        if (mVideoEncoder.isRecording()) {
+            mVideoEncoder.stopRecording();
+        }
     }
 }

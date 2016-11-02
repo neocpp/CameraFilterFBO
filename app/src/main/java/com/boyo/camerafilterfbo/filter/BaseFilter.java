@@ -94,8 +94,8 @@ public class BaseFilter {
             float ratioH = mSurfaceHeight * 1.0f / mPreviewHeight;
             float ratio = Math.max(ratioH, ratioW);
 
-            float offsetx = (mPreviewWidth * ratio - mSurfaceWidth) / (mSurfaceWidth * 2.0f);
-            float offsety = (mPreviewHeight * ratio - mSurfaceHeight) / (mSurfaceHeight * 2.0f);
+            float offsetx = (1 - mSurfaceWidth / (mPreviewWidth * ratio)) / 2.0f;
+            float offsety = (1 - mSurfaceHeight / (mPreviewHeight * ratio)) / 2.0f;
 
             float tcoords[] = {
                     1.0f - offsetx, 0.0f + offsety,
